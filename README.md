@@ -4,7 +4,7 @@ A FastAPI connector to interact with Odoo API
 
 ## Features
 
-- FastAPI application with `/users` endpoint
+- FastAPI application with `/contacts` and `/contacts/{contact_id}` endpoints
 - Odoo API client with authentication
 - Full type hints support
 - Unit and functional tests
@@ -65,10 +65,64 @@ This will start:
 ### GET /
 Root endpoint returning a welcome message.
 
-### GET /users
-Get list of users from Odoo API.
+### GET /contacts
+Get list of contacts from Odoo API.
 
-Returns a list of user objects with fields: `id`, `name`, `login`, `email`.
+Returns a list of contact objects with fields: `id`, `name`, `email`, `phone`, `company_name`.
+
+**Example:**
+```bash
+curl http://localhost:8000/contacts
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "123456789",
+    "company_name": "Acme Corp"
+  },
+  {
+    "id": 2,
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "phone": "987654321",
+    "company_name": "Tech Co"
+  }
+]
+```
+
+### GET /contacts/{contact_id}
+Get a specific contact by ID from Odoo API.
+
+**Parameters:**
+- `contact_id` (path parameter): The ID of the contact to retrieve
+
+**Example:**
+```bash
+curl http://localhost:8000/contacts/1
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "phone": "123456789",
+  "company_name": "Acme Corp"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "detail": "Contact with ID 999 not found"
+}
+```
 
 ## Development
 
