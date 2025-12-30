@@ -1,11 +1,11 @@
 """Functional tests for FastAPI endpoints."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, get_odoo_client
 
 client = TestClient(app)
 
@@ -26,29 +26,46 @@ class TestEndpoints:
             {"id": 2, "name": "User1", "login": "user1", "email": "user1@example.com"},
         ]
 
-        with patch("app.main.OdooClient") as mock_client_class:
-            mock_instance = AsyncMock()
-            mock_instance.get_users.return_value = mock_users
-            mock_client_class.return_value = mock_instance
+        mock_client = AsyncMock()
+        mock_client.get_users.return_value = mock_users
 
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
             response = client.get("/users")
 
             assert response.status_code == 200
             assert response.json() == mock_users
-            mock_instance.get_users.assert_called_once()
+            mock_client.get_users.assert_called_once()
+        finally:
+            app.dependency_overrides.clear()
 
     def test_users_endpoint_failure(self) -> None:
         """Test users endpoint failure."""
-        with patch("app.main.OdooClient") as mock_client_class:
-            mock_instance = AsyncMock()
-            mock_instance.get_users.side_effect = Exception("Connection error")
-            mock_client_class.return_value = mock_instance
+        mock_client = AsyncMock()
+        mock_client.get_users.side_effect = Exception("Connection error")
 
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
             response = client.get("/users")
 
             assert response.status_code == 500
             assert "Failed to get users" in response.json()["detail"]
             assert "Connection error" in response.json()["detail"]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_odoo_client_singleton(self) -> None:
+        """Test that get_odoo_client returns singleton instance."""
+        # Clear singleton to start fresh
+        import app.main
+        app.main._odoo_client = None
+
+        client1 = get_odoo_client()
+        client2 = get_odoo_client()
+
+        assert client1 is client2
 
 
 @pytest.mark.asyncio
@@ -61,14 +78,19 @@ class TestEndpointsAsync:
             {"id": 1, "name": "Admin", "login": "admin", "email": "admin@example.com"},
         ]
 
-        with patch("app.main.OdooClient") as mock_client_class:
-            mock_instance = AsyncMock()
-            mock_instance.get_users.return_value = mock_users
-            mock_client_class.return_value = mock_instance
+        mock_client = AsyncMock()
+        mock_client.get_users.return_value = mock_users
 
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
             response = client.get("/users")
 
             assert response.status_code == 200
             data = response.json()
             assert len(data) == 1
             assert data[0]["name"] == "Admin"
+        finally:
+            app.dependency_overrides.clear()
+
+
