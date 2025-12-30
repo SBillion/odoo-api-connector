@@ -184,6 +184,9 @@ The application can be configured using environment variables:
 - `ODOO_DB`: Odoo database name (default: `odoo`)
 - `ODOO_USERNAME`: Odoo username (default: `admin`)
 - `ODOO_PASSWORD`: Odoo password (default: `admin`)
+- `ODOO_API_KEY`: Odoo API key (optional, alternative to username/password authentication)
+
+**Note**: If `ODOO_API_KEY` is provided, it will be used for authentication instead of username/password.
 
 ## License
 

@@ -17,6 +17,7 @@ class OdooClient:
         db: str | None = None,
         username: str | None = None,
         password: str | None = None,
+        api_key: str | None = None,
     ) -> None:
         """Initialize Odoo client.
 
@@ -25,11 +26,13 @@ class OdooClient:
             db: Database name
             username: Username for authentication
             password: Password for authentication
+            api_key: API key for authentication (alternative to username/password)
         """
         self.url = url or settings.odoo_url
         self.db = db or settings.odoo_db
         self.username = username or settings.odoo_username
         self.password = password or settings.odoo_password
+        self.api_key = api_key or settings.odoo_api_key
         self._uid: int | None = None
         self._session_id: str | None = None
         # Reusable HTTP client
@@ -42,7 +45,11 @@ class OdooClient:
             AsyncClient instance
         """
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=30.0)
+            headers = {}
+            # If API key is provided, add it to headers
+            if self.api_key:
+                headers["api-key"] = self.api_key
+            self._client = httpx.AsyncClient(timeout=30.0, headers=headers)
         return self._client
 
     async def authenticate(self) -> int:
@@ -54,6 +61,13 @@ class OdooClient:
         Raises:
             httpx.HTTPError: If authentication fails
         """
+        # If API key is provided, skip traditional authentication
+        if self.api_key:
+            # With API key, we can skip authentication and set a dummy UID
+            # The API key in headers will handle authentication
+            self._uid = 1  # Placeholder UID when using API key
+            return self._uid
+
         client = await self._get_client()
         response = await client.post(
             f"{self.url}/web/session/authenticate",
