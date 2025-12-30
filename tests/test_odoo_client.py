@@ -1,6 +1,6 @@
 """Unit tests for Odoo client."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -36,8 +36,6 @@ class TestOdooClient:
     @pytest.mark.asyncio
     async def test_authenticate_success(self) -> None:
         """Test successful authentication."""
-        from unittest.mock import MagicMock
-
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "result": {
@@ -46,11 +44,12 @@ class TestOdooClient:
             }
         }
         mock_response.raise_for_status = MagicMock()
+        mock_response.cookies = {}
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             uid = await client.authenticate()
@@ -61,8 +60,6 @@ class TestOdooClient:
     @pytest.mark.asyncio
     async def test_authenticate_failure_with_error(self) -> None:
         """Test authentication failure with error response."""
-        from unittest.mock import MagicMock
-
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "error": {
@@ -71,10 +68,10 @@ class TestOdooClient:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             with pytest.raises(httpx.HTTPError, match="Authentication failed"):
@@ -83,16 +80,14 @@ class TestOdooClient:
     @pytest.mark.asyncio
     async def test_authenticate_failure_no_uid(self) -> None:
         """Test authentication failure when no UID is returned."""
-        from unittest.mock import MagicMock
-
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": {}}
         mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             with pytest.raises(httpx.HTTPError, match="No user ID returned"):
@@ -101,12 +96,11 @@ class TestOdooClient:
     @pytest.mark.asyncio
     async def test_get_users_success(self) -> None:
         """Test successful retrieval of users."""
-        from unittest.mock import MagicMock
-
         # Mock authentication
         auth_response = MagicMock()
         auth_response.json.return_value = {"result": {"uid": 123}}
         auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
 
         # Mock get users
         users_response = MagicMock()
@@ -118,10 +112,10 @@ class TestOdooClient:
         }
         users_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                side_effect=[auth_response, users_response]
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, users_response])
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             users = await client.get_users()
@@ -133,8 +127,6 @@ class TestOdooClient:
     @pytest.mark.asyncio
     async def test_get_users_with_existing_uid(self) -> None:
         """Test getting users when already authenticated."""
-        from unittest.mock import MagicMock
-
         users_response = MagicMock()
         users_response.json.return_value = {
             "result": [
@@ -143,10 +135,10 @@ class TestOdooClient:
         }
         users_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=users_response
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=users_response)
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             client._uid = 123  # Set UID to skip authentication
@@ -155,17 +147,16 @@ class TestOdooClient:
 
             assert len(users) == 1
             # Verify only one call was made (no authentication call)
-            mock_client.return_value.__aenter__.return_value.post.assert_called_once()
+            mock_client.post.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_users_failure(self) -> None:
         """Test failure when getting users."""
-        from unittest.mock import MagicMock
-
         # Mock authentication
         auth_response = MagicMock()
         auth_response.json.return_value = {"result": {"uid": 123}}
         auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
 
         # Mock get users with error
         users_response = MagicMock()
@@ -176,11 +167,26 @@ class TestOdooClient:
         }
         users_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                side_effect=[auth_response, users_response]
-            )
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, users_response])
+            mock_get_client.return_value = mock_client
 
             client = OdooClient()
             with pytest.raises(httpx.HTTPError, match="Failed to get users"):
                 await client.get_users()
+
+    @pytest.mark.asyncio
+    async def test_close(self) -> None:
+        """Test closing the client."""
+        mock_client = AsyncMock()
+        mock_client.aclose = AsyncMock()
+
+        client = OdooClient()
+        client._client = mock_client
+
+        await client.close()
+
+        mock_client.aclose.assert_called_once()
+        assert client._client is None
+
