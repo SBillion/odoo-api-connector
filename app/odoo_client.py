@@ -3,6 +3,7 @@
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
 
 from app.config import settings
 
@@ -84,11 +85,11 @@ class OdooClient:
 
         return uid
 
-    async def get_users(self) -> list[dict[str, Any]]:
-        """Get list of users from Odoo.
+    async def get_contacts(self) -> list[dict[str, Any]]:
+        """Get list of contacts from Odoo.
 
         Returns:
-            List of user dictionaries
+            List of contact dictionaries
 
         Raises:
             httpx.HTTPError: If request fails
@@ -103,11 +104,11 @@ class OdooClient:
                 "jsonrpc": "2.0",
                 "method": "call",
                 "params": {
-                    "model": "res.users",
+                    "model": "res.partner",
                     "method": "search_read",
                     "args": [[]],
                     "kwargs": {
-                        "fields": ["id", "name", "login", "email"],
+                        "fields": ["id", "name", "email", "phone", "company_name"],
                     },
                 },
                 "id": 1,
@@ -117,13 +118,57 @@ class OdooClient:
         data = response.json()
 
         if "error" in data:
-            raise httpx.HTTPError(f"Failed to get users: {data['error']}")
+            raise httpx.HTTPError(f"Failed to get contacts: {data['error']}")
 
         return data.get("result", [])
+
+    async def get_contact_by_id(self, contact_id: int) -> dict[str, Any]:
+        """Get a specific contact by ID from Odoo.
+
+        Args:
+            contact_id: ID of the contact to retrieve
+
+        Returns:
+            Contact dictionary
+
+        Raises:
+            HTTPException: If contact not found (404)
+            httpx.HTTPError: If request fails
+        """
+        if not self._uid:
+            await self.authenticate()
+
+        client = await self._get_client()
+        response = await client.post(
+            f"{self.url}/web/dataset/call_kw",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                "params": {
+                    "model": "res.partner",
+                    "method": "read",
+                    "args": [[contact_id]],
+                    "kwargs": {
+                        "fields": ["id", "name", "email", "phone", "company_name"],
+                    },
+                },
+                "id": 1,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if "error" in data:
+            raise httpx.HTTPError(f"Failed to get contact: {data['error']}")
+
+        result = data.get("result", [])
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Contact with ID {contact_id} not found")
+
+        return result[0]
 
     async def close(self) -> None:
         """Close HTTP client."""
         if self._client is not None:
             await self._client.aclose()
             self._client = None
-
