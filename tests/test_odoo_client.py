@@ -338,10 +338,10 @@ class TestOdooClient:
     async def test_authenticate_with_api_key(self) -> None:
         """Test authentication with API key skips traditional auth."""
         client = OdooClient(api_key="test-api-key")
-        
+
         # Should not make any HTTP calls when API key is present
         uid = await client.authenticate()
-        
+
         assert uid == 1  # Placeholder UID
         assert client._uid == 1
 
@@ -349,10 +349,10 @@ class TestOdooClient:
     async def test_get_client_with_api_key(self) -> None:
         """Test that API key is added to headers."""
         client = OdooClient(api_key="test-api-key")
-        
+
         http_client = await client._get_client()
-        
+
         assert "api-key" in http_client.headers
         assert http_client.headers["api-key"] == "test-api-key"
-        
+
         await client.close()
