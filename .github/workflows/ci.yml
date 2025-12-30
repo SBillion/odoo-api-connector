@@ -36,9 +36,9 @@ jobs:
       run: |
         uv run ruff format --check .
 
-    - name: Run mypy
+    - name: Run ty
       run: |
-        uv run mypy app/ --ignore-missing-imports
+        uv run ty check app/
 
     - name: Run tests with coverage
       run: |
