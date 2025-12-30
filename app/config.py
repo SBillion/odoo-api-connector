@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     odoo_db: str = "odoo"
     odoo_username: str = "admin"
     odoo_password: str = "admin"
+    odoo_api_key: str | None = None
 
 
 settings = Settings()
