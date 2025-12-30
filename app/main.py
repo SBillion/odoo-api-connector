@@ -38,24 +38,48 @@ async def root() -> dict[str, str]:
     return {"message": "Welcome to Odoo API Connector"}
 
 
-@app.get("/users")
-async def get_users(
-    client: Annotated[OdooClient, Depends(get_odoo_client)]
+@app.get("/contacts")
+async def get_contacts(
+    client: Annotated[OdooClient, Depends(get_odoo_client)],
 ) -> list[dict[str, Any]]:
-    """Get users from Odoo API.
+    """Get contacts from Odoo API.
 
     Args:
         client: Injected OdooClient instance
 
     Returns:
-        List of users from Odoo
+        List of contacts from Odoo
 
     Raises:
-        HTTPException: If failed to retrieve users
+        HTTPException: If failed to retrieve contacts
     """
     try:
-        users = await client.get_users()
-        return users
+        contacts = await client.get_contacts()
+        return contacts
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get users: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get contacts: {str(e)}")
 
+
+@app.get("/contacts/{contact_id}")
+async def get_contact_by_id(
+    contact_id: int, client: Annotated[OdooClient, Depends(get_odoo_client)]
+) -> dict[str, Any]:
+    """Get a specific contact by ID from Odoo API.
+
+    Args:
+        contact_id: ID of the contact to retrieve
+        client: Injected OdooClient instance
+
+    Returns:
+        Contact data
+
+    Raises:
+        HTTPException: If failed to retrieve contact or contact not found
+    """
+    try:
+        contact = await client.get_contact_by_id(contact_id)
+        return contact
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get contact: {str(e)}")
