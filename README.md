@@ -238,6 +238,63 @@ The application can be configured using environment variables:
 
 **Note**: If `ODOO_API_KEY` is provided, it will be used for authentication instead of username/password.
 
+## Security
+
+This API includes basic hardening middleware and a per-client rate limiter.
+
+### Rate limiting
+
+Rate limiting is enabled by default (per IP).
+
+- `API_ENABLE_RATE_LIMIT`: Enable/disable rate limiting (default: `true`)
+- `API_RATE_LIMIT_DEFAULT`: Default limit string (default: `60/minute`)
+
+Example:
+```bash
+API_ENABLE_RATE_LIMIT=true
+API_RATE_LIMIT_DEFAULT="10/minute"
+```
+
+### Security headers
+
+Security headers are enabled by default.
+
+- `API_ENABLE_SECURITY_HEADERS`: Enable/disable security headers (default: `true`)
+
+Currently sets (when not already present):
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+- `Permissions-Policy: geolocation=(), microphone=(), camera=()`
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+
+### Request body size limit
+
+The API can reject requests with large bodies using the `Content-Length` header.
+
+- `API_ENABLE_MAX_BODY_SIZE`: Enable/disable max body size check (default: `true`)
+- `API_MAX_REQUEST_BODY_BYTES`: Max allowed request size in bytes (default: `1048576` = 1 MiB)
+
+### Allowed hosts
+
+Optionally restrict the `Host` header.
+
+- `API_ALLOWED_HOSTS`: List of allowed hosts (default: `["*"]`)
+
+Example (Pydantic expects JSON for list values):
+```bash
+API_ALLOWED_HOSTS='["example.com","api.example.com"]'
+```
+
+### CORS
+
+- `API_CORS_ORIGINS`: List of allowed CORS origins (default: `["*"]`)
+
+Example (Pydantic expects JSON for list values):
+```bash
+API_CORS_ORIGINS='["https://example.com"]'
+```
+
 ## License
 
 MIT
