@@ -1,25 +1,55 @@
 """Functional tests for FastAPI endpoints."""
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.main import app, get_odoo_client
+from app.config import Settings
+from app.main import create_app, get_odoo_client
 
-client = TestClient(app)
+
+@pytest.fixture()
+def app() -> Generator[FastAPI, None, None]:
+    app_instance = create_app(
+        Settings(
+            api_rate_limit_default="2/minute",
+            api_allowed_hosts=["testserver"],
+            api_cors_origins=["*"],
+        )
+    )
+    yield app_instance
+
+
+@pytest.fixture()
+def client(app: FastAPI) -> TestClient:
+    return TestClient(app)
 
 
 class TestEndpoints:
     """Test cases for API endpoints."""
 
-    def test_root_endpoint(self) -> None:
+    def test_root_endpoint(self, client: TestClient) -> None:
         """Test root endpoint."""
         response = client.get("/")
         assert response.status_code == 200
         assert response.json() == {"message": "Welcome to Odoo API Connector"}
 
-    def test_contacts_endpoint_success(self) -> None:
+    def test_security_headers_present(self, client: TestClient) -> None:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert response.headers.get("x-content-type-options") == "nosniff"
+        assert response.headers.get("x-frame-options") == "DENY"
+
+    def test_rate_limiting(self, client: TestClient) -> None:
+        assert client.get("/").status_code == 200
+        assert client.get("/").status_code == 200
+        response = client.get("/")
+        assert response.status_code == 429
+
+    def test_contacts_endpoint_success(self, app: FastAPI, client: TestClient) -> None:
         """Test successful contacts endpoint."""
         mock_contacts = [
             {
@@ -52,7 +82,7 @@ class TestEndpoints:
         finally:
             app.dependency_overrides.clear()
 
-    def test_contacts_endpoint_failure(self) -> None:
+    def test_contacts_endpoint_failure(self, app: FastAPI, client: TestClient) -> None:
         """Test contacts endpoint failure."""
         mock_client = AsyncMock()
         mock_client.get_contacts.side_effect = Exception("Connection error")
@@ -68,7 +98,7 @@ class TestEndpoints:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_contact_by_id_success(self) -> None:
+    def test_get_contact_by_id_success(self, app: FastAPI, client: TestClient) -> None:
         """Test successful get contact by ID."""
         mock_contact = {
             "id": 1,
@@ -92,7 +122,7 @@ class TestEndpoints:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_contact_by_id_not_found(self) -> None:
+    def test_get_contact_by_id_not_found(self, app: FastAPI, client: TestClient) -> None:
         """Test get contact by ID when contact not found."""
         from fastapi import HTTPException
 
@@ -111,7 +141,7 @@ class TestEndpoints:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_contact_by_id_failure(self) -> None:
+    def test_get_contact_by_id_failure(self, app: FastAPI, client: TestClient) -> None:
         """Test get contact by ID failure."""
         mock_client = AsyncMock()
         mock_client.get_contact_by_id.side_effect = Exception("Connection error")
@@ -144,7 +174,7 @@ class TestEndpoints:
 class TestEndpointsAsync:
     """Async test cases for API endpoints."""
 
-    async def test_contacts_endpoint_async(self) -> None:
+    async def test_contacts_endpoint_async(self, app: FastAPI, client: TestClient) -> None:
         """Test contacts endpoint with async test."""
         mock_contacts = [
             {
