@@ -1,5 +1,9 @@
 # odoo-api-connector
 
+[![CI](https://github.com/SBillion/odoo-api-connector/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SBillion/odoo-api-connector/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/SBillion/odoo-api-connector/branch/main/graph/badge.svg)](https://codecov.io/gh/SBillion/odoo-api-connector)
+[![Python](https://img.shields.io/badge/python-3.14%2B-blue)](https://www.python.org/downloads/)
+
 A FastAPI connector to interact with Odoo API
 
 ## Features
@@ -14,7 +18,7 @@ A FastAPI connector to interact with Odoo API
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.14+
 - UV package manager
 - Docker and Docker Compose (for containerized setup)
 
