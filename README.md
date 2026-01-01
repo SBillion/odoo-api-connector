@@ -45,13 +45,23 @@ cp .env.example .env
 
 ## Running the Application
 
-### Using UV (Development)
+### Using FastAPI CLI (Development)
+
+```bash
+fastapi dev app/main.py
+```
+
+The API will be available at `http://localhost:8000`
+
+API documentation is automatically available at:
+- **Swagger UI:** `http://localhost:8000/docs`
+- **ReDoc:** `http://localhost:8000/redoc`
+
+### Alternative: Using UV with Uvicorn
 
 ```bash
 uv run uvicorn app.main:app --reload
 ```
-
-The API will be available at `http://localhost:8000`
 
 ### Using Docker Compose
 
@@ -65,6 +75,16 @@ This will start:
 - FastAPI application on `http://localhost:8000`
 
 ## API Endpoints
+
+### Documentation Endpoints
+
+Interactive API documentation is automatically generated:
+
+- **GET /docs** - Swagger UI for interacting with the API
+- **GET /redoc** - ReDoc (alternative API documentation)
+- **GET /openapi.json** - OpenAPI schema in JSON format
+
+### Business Endpoints
 
 ### GET /
 Root endpoint returning a welcome message.
