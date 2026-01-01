@@ -9,28 +9,34 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.1
+    rev: v0.14.10
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/ty
-    rev: v0.3.1
+  - repo: local
     hooks:
       - id: ty
+        name: ty type checker
+        entry: uv run ty check .
+        language: python
+        types: [python]
         additional_dependencies:
           - fastapi
           - httpx
           - pydantic
           - pydantic-settings
-        args: [--ignore-missing-imports, --no-strict-optional]
-
+          - pytest
+          - pytest-asyncio
+          - slowapi
+        always_run: true
+        stages: [pre-commit]
   - repo: local
     hooks:
       - id: pytest
         name: pytest
-        entry: pytest
+        entry: uv run pytest
         language: system
         pass_filenames: false
         always_run: true
