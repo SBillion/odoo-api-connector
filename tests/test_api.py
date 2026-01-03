@@ -38,16 +38,83 @@ class TestEndpoints:
         assert response.json() == {"message": "Welcome to Odoo API Connector"}
 
     def test_security_headers_present(self, client: TestClient) -> None:
+        """Test that security headers are present on the root endpoint response."""
         response = client.get("/")
         assert response.status_code == 200
         assert response.headers.get("x-content-type-options") == "nosniff"
         assert response.headers.get("x-frame-options") == "DENY"
+        assert response.headers.get("referrer-policy") == "no-referrer"
+        assert response.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"
+        assert response.headers.get("strict-transport-security") == "max-age=31536000; includeSubDomains"
 
     def test_rate_limiting(self, client: TestClient) -> None:
-        assert client.get("/").status_code == 200
-        assert client.get("/").status_code == 200
-        response = client.get("/")
+        """Test that the root endpoint is rate limited after repeated requests."""
+        # Create a fresh app instance to avoid rate limiter state interference
+        test_app = create_app(
+            Settings(
+                api_rate_limit_default="2/minute",
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+        
+        assert test_client.get("/").status_code == 200
+        assert test_client.get("/").status_code == 200
+        response = test_client.get("/")
         assert response.status_code == 429
+
+    def test_max_body_size_exceeded(self) -> None:
+        """Test that requests exceeding max body size are rejected with 413."""
+        test_app = create_app(
+            Settings(
+                api_max_request_body_bytes=100,
+                api_enable_max_body_size=True,
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+        
+        # Send a request with Content-Length header exceeding the limit
+        large_body = "x" * 200
+        response = test_client.post("/", content=large_body)
+        assert response.status_code == 413
+        assert response.text == "Request body too large"
+
+    def test_max_body_size_within_limit(self) -> None:
+        """Test that requests within max body size are accepted."""
+        test_app = create_app(
+            Settings(
+                api_max_request_body_bytes=100,
+                api_enable_max_body_size=True,
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+        
+        # Send a request with Content-Length header within the limit
+        small_body = "x" * 50
+        response = test_client.get("/", content=small_body)
+        assert response.status_code == 200
+
+    def test_invalid_content_length_header(self) -> None:
+        """Test that requests with invalid Content-Length headers return 400."""
+        test_app = create_app(
+            Settings(
+                api_max_request_body_bytes=100,
+                api_enable_max_body_size=True,
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+        
+        # Send a request with an invalid Content-Length header
+        response = test_client.get("/", headers={"Content-Length": "invalid"})
+        assert response.status_code == 400
+        assert response.text == "Invalid Content-Length header"
 
     def test_contacts_endpoint_success(self, app: FastAPI, client: TestClient) -> None:
         """Test successful contacts endpoint."""
