@@ -32,10 +32,10 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
     # 5. SecurityHeadersMiddleware - add headers to successful responses
 
     if active_settings.api_allowed_hosts != ["*"]:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=active_settings.api_allowed_hosts)
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=active_settings.api_allowed_hosts)  # type: ignore[arg-type]
 
     if active_settings.api_enable_max_body_size:
-        app.add_middleware(
+        app.add_middleware(  # type: ignore[arg-type]
             MaxBodySizeMiddleware, max_body_size_bytes=active_settings.api_max_request_body_bytes
         )
 
@@ -45,12 +45,12 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         enabled=active_settings.api_enable_rate_limit,
     )
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     if active_settings.api_enable_rate_limit:
-        app.add_middleware(SlowAPIMiddleware)
+        app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
 
     if active_settings.api_cors_origins is not None:
-        app.add_middleware(
+        app.add_middleware(  # type: ignore[arg-type]
             CORSMiddleware,
             allow_origins=active_settings.api_cors_origins,
             allow_credentials=True,
@@ -59,7 +59,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         )
 
     if active_settings.api_enable_security_headers:
-        app.add_middleware(SecurityHeadersMiddleware)
+        app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
 
     @app.get("/")
     @limiter.limit(active_settings.api_rate_limit_default)
