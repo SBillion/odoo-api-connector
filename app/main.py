@@ -24,20 +24,15 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         version="0.1.0",
     )
 
+    # Middleware order (outer to inner):
+    # 1. TrustedHostMiddleware - validate host early
+    # 2. MaxBodySizeMiddleware - reject large requests early
+    # 3. SlowAPIMiddleware - rate limiting
+    # 4. CORSMiddleware - handle CORS
+    # 5. SecurityHeadersMiddleware - add headers to successful responses
+
     if active_settings.api_allowed_hosts != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=active_settings.api_allowed_hosts)
-
-    if active_settings.api_cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=active_settings.api_cors_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["*"],
-        )
-
-    if active_settings.api_enable_security_headers:
-        app.add_middleware(SecurityHeadersMiddleware)
 
     if active_settings.api_enable_max_body_size:
         app.add_middleware(
@@ -53,6 +48,18 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     if active_settings.api_enable_rate_limit:
         app.add_middleware(SlowAPIMiddleware)
+
+    if active_settings.api_cors_origins is not None:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=active_settings.api_cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["*"],
+        )
+
+    if active_settings.api_enable_security_headers:
+        app.add_middleware(SecurityHeadersMiddleware)
 
     @app.get("/")
     @limiter.limit(active_settings.api_rate_limit_default)
