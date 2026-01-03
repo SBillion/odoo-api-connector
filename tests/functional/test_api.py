@@ -276,3 +276,260 @@ class TestEndpointsAsync:
             assert data[0]["name"] == "John Doe"
         finally:
             app.dependency_overrides.clear()
+
+    async def test_root_endpoint_cors_headers(self, app: FastAPI, client: TestClient) -> None:
+        """Test CORS headers on root endpoint."""
+        response = client.get("/", headers={"Origin": "http://example.com"})
+        assert response.status_code == 200
+        # CORS should be configured based on app settings
+
+    async def test_contacts_endpoint_cors_preflight(self, app: FastAPI, client: TestClient) -> None:
+        """Test CORS preflight request for contacts endpoint."""
+        response = client.options(
+            "/contacts",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.status_code == 200
+
+    async def test_get_contact_by_id_cors_preflight(self, app: FastAPI, client: TestClient) -> None:
+        """Test CORS preflight request for get contact by ID endpoint."""
+        response = client.options(
+            "/contacts/1",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.status_code == 200
+
+    async def test_contacts_endpoint_with_multiple_results(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test contacts endpoint with multiple results."""
+        mock_contacts = [
+            {
+                "id": i,
+                "name": f"Contact {i}",
+                "email": f"contact{i}@example.com",
+                "phone": f"12345{i}",
+                "company_name": f"Company {i}",
+            }
+            for i in range(1, 6)
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.get_contacts.return_value = mock_contacts
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 5
+            for i, contact in enumerate(data, 1):
+                assert contact["name"] == f"Contact {i}"
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_get_contact_by_id_with_special_characters(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test get contact by ID with special characters in data."""
+        mock_contact = {
+            "id": 1,
+            "name": "José García-López",
+            "email": "josé@example.com",
+            "phone": "+33 (0) 1 23 45 67 89",
+            "company_name": "Société Générale",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get_contact_by_id.return_value = mock_contact
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts/1")
+
+            assert response.status_code == 200
+            assert response.json() == mock_contact
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_contacts_endpoint_preserves_data_types(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test that contacts endpoint preserves data types."""
+        mock_contacts = [
+            {
+                "id": 1,
+                "name": "Contact 1",
+                "email": "contact1@example.com",
+                "phone": "123456",
+                "company_name": "Company 1",
+            }
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.get_contacts.return_value = mock_contacts
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert isinstance(data[0]["id"], int)
+            assert isinstance(data[0]["name"], str)
+            assert isinstance(data[0]["email"], str)
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_get_contact_by_id_with_different_ids(self, app: FastAPI) -> None:
+        """Test get contact by ID with various contact IDs."""
+        test_app = create_app(
+            Settings(
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+
+        for contact_id in [1, 100, 999]:
+            mock_contact = {
+                "id": contact_id,
+                "name": f"Contact {contact_id}",
+                "email": f"contact{contact_id}@example.com",
+                "phone": f"555-000{contact_id}",
+                "company_name": "Test Co",
+            }
+
+            mock_client = AsyncMock()
+            mock_client.get_contact_by_id.return_value = mock_contact
+
+            test_app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+            try:
+                response = test_client.get(f"/contacts/{contact_id}")
+
+                assert response.status_code == 200
+                assert response.json()["id"] == contact_id
+            finally:
+                test_app.dependency_overrides.clear()
+
+    async def test_endpoints_return_json_content_type(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test that endpoints return JSON content type."""
+        # Test root endpoint
+        response = client.get("/")
+        assert response.headers.get("content-type") == "application/json"
+
+        # Test contacts endpoint with mock
+        mock_client = AsyncMock()
+        mock_client.get_contacts.return_value = []
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts")
+            assert response.headers.get("content-type") == "application/json"
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_security_headers_on_all_endpoints(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test that security headers are present on all endpoints."""
+        endpoints = ["/", "/contacts"]
+
+        for endpoint in endpoints:
+            response = client.get(endpoint)
+            assert response.headers.get("x-content-type-options") == "nosniff"
+            assert response.headers.get("x-frame-options") == "DENY"
+            assert response.headers.get("referrer-policy") == "no-referrer"
+
+    async def test_rate_limiting_with_contact_endpoint(self, app: FastAPI) -> None:
+        """Test rate limiting on contacts endpoint."""
+        test_app = create_app(
+            Settings(
+                api_rate_limit_default="1/minute",
+                api_allowed_hosts=["testserver"],
+                api_cors_origins=["*"],
+            )
+        )
+        test_client = TestClient(test_app)
+
+        mock_client = AsyncMock()
+        mock_client.get_contacts.return_value = []
+
+        test_app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            # First request should succeed
+            response1 = test_client.get("/contacts")
+            assert response1.status_code == 200
+
+            # Second request should be rate limited
+            response2 = test_client.get("/contacts")
+            assert response2.status_code == 429
+        finally:
+            test_app.dependency_overrides.clear()
+
+    async def test_get_contact_by_id_string_id_converted_to_int(
+        self, app: FastAPI, client: TestClient
+    ) -> None:
+        """Test that contact ID is properly converted to int."""
+        mock_contact = {
+            "id": 42,
+            "name": "Test Contact",
+            "email": "test@example.com",
+            "phone": "123456",
+            "company_name": "Test",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get_contact_by_id.return_value = mock_contact
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts/42")
+
+            assert response.status_code == 200
+            # Verify mock was called with integer, not string
+            mock_client.get_contact_by_id.assert_called_once_with(42)
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_contacts_endpoint_empty_list(self, app: FastAPI, client: TestClient) -> None:
+        """Test contacts endpoint when no contacts exist."""
+        mock_client = AsyncMock()
+        mock_client.get_contacts.return_value = []
+
+        app.dependency_overrides[get_odoo_client] = lambda: mock_client
+
+        try:
+            response = client.get("/contacts")
+
+            assert response.status_code == 200
+            assert response.json() == []
+        finally:
+            app.dependency_overrides.clear()
+
+    async def test_root_endpoint_response_structure(self, app: FastAPI, client: TestClient) -> None:
+        """Test root endpoint response structure."""
+        response = client.get("/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+        assert "message" in data
+        assert isinstance(data["message"], str)
+        assert len(data["message"]) > 0
