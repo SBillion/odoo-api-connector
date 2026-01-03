@@ -356,3 +356,209 @@ class TestOdooClient:
         assert http_client.headers["api-key"] == "test-api-key"
 
         await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_client_reuses_same_instance(self) -> None:
+        """Test that _get_client returns the same instance."""
+        client = OdooClient()
+
+        http_client_1 = await client._get_client()
+        http_client_2 = await client._get_client()
+
+        assert http_client_1 is http_client_2
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_client_without_api_key(self) -> None:
+        """Test that client is created without API key when not provided."""
+        client = OdooClient(api_key=None)
+
+        http_client = await client._get_client()
+
+        assert "api-key" not in http_client.headers
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_with_http_error(self) -> None:
+        """Test authentication failure when HTTP error occurs."""
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="401 Unauthorized",
+            request=MagicMock(),
+            response=MagicMock(),
+        )
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.authenticate()
+
+    @pytest.mark.asyncio
+    async def test_get_contacts_empty_result(self) -> None:
+        """Test getting contacts when result is empty."""
+        # Mock authentication
+        auth_response = MagicMock()
+        auth_response.json.return_value = {"result": {"uid": 123}}
+        auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
+
+        # Mock get contacts with empty result
+        contacts_response = MagicMock()
+        contacts_response.json.return_value = {"result": []}
+        contacts_response.raise_for_status = MagicMock()
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, contacts_response])
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            contacts = await client.get_contacts()
+
+            assert contacts == []
+
+    @pytest.mark.asyncio
+    async def test_get_contacts_with_http_error(self) -> None:
+        """Test get contacts failure when HTTP error occurs."""
+        # Mock authentication
+        auth_response = MagicMock()
+        auth_response.json.return_value = {"result": {"uid": 123}}
+        auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
+
+        # Mock get contacts with HTTP error
+        contacts_response = MagicMock()
+        contacts_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="500 Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(),
+        )
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, contacts_response])
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.get_contacts()
+
+    @pytest.mark.asyncio
+    async def test_get_contact_by_id_failure_with_http_error(self) -> None:
+        """Test get contact by ID failure when HTTP error occurs."""
+        # Mock authentication
+        auth_response = MagicMock()
+        auth_response.json.return_value = {"result": {"uid": 123}}
+        auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
+
+        # Mock get contact by ID with HTTP error
+        contact_response = MagicMock()
+        contact_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            message="500 Internal Server Error",
+            request=MagicMock(),
+            response=MagicMock(),
+        )
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, contact_response])
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.get_contact_by_id(1)
+
+    @pytest.mark.asyncio
+    async def test_close_when_client_is_none(self) -> None:
+        """Test closing when client is None."""
+        client = OdooClient()
+        # Should not raise any error
+        await client.close()
+        assert client._client is None
+
+    @pytest.mark.asyncio
+    async def test_authenticate_stores_session_id(self) -> None:
+        """Test that authenticate stores session ID from cookies."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"result": {"uid": 123, "username": "admin"}}
+        mock_response.raise_for_status = MagicMock()
+        mock_response.cookies = {"session_id": "test-session-123"}
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            uid = await client.authenticate()
+
+            assert uid == 123
+            assert client._session_id == "test-session-123"
+
+    @pytest.mark.asyncio
+    async def test_get_contacts_request_format(self) -> None:
+        """Test that get_contacts sends request in correct format."""
+        # Mock authentication
+        auth_response = MagicMock()
+        auth_response.json.return_value = {"result": {"uid": 123}}
+        auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
+
+        # Mock get contacts
+        contacts_response = MagicMock()
+        contacts_response.json.return_value = {"result": []}
+        contacts_response.raise_for_status = MagicMock()
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, contacts_response])
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            await client.get_contacts()
+
+            # Check the second call (get_contacts call)
+            calls = mock_client.post.call_args_list
+            assert len(calls) == 2
+            second_call_args = calls[1]
+            assert "/web/dataset/call_kw" in second_call_args[0][0]
+            assert second_call_args[1]["json"]["params"]["model"] == "res.partner"
+            assert second_call_args[1]["json"]["params"]["method"] == "search_read"
+
+    @pytest.mark.asyncio
+    async def test_get_contact_by_id_request_format(self) -> None:
+        """Test that get_contact_by_id sends request in correct format."""
+        # Mock authentication
+        auth_response = MagicMock()
+        auth_response.json.return_value = {"result": {"uid": 123}}
+        auth_response.raise_for_status = MagicMock()
+        auth_response.cookies = {}
+
+        # Mock get contact by ID
+        contact_response = MagicMock()
+        contact_response.json.return_value = {"result": [{"id": 5, "name": "Test"}]}
+        contact_response.raise_for_status = MagicMock()
+
+        with patch.object(OdooClient, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=[auth_response, contact_response])
+            mock_get_client.return_value = mock_client
+
+            client = OdooClient()
+            await client.get_contact_by_id(5)
+
+            # Check the second call (get_contact_by_id call)
+            calls = mock_client.post.call_args_list
+            assert len(calls) == 2
+            second_call_args = calls[1]
+            assert "/web/dataset/call_kw" in second_call_args[0][0]
+            assert second_call_args[1]["json"]["params"]["model"] == "res.partner"
+            assert second_call_args[1]["json"]["params"]["method"] == "read"
+            assert second_call_args[1]["json"]["params"]["args"] == [[5]]

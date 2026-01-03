@@ -28,7 +28,7 @@ A FastAPI connector to interact with Odoo API
 
 1. Install UV (if not already installed):
 ```bash
-pip install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 2. Install dependencies:
