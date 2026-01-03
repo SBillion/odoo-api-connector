@@ -48,7 +48,7 @@ cp .env.example .env
 ### Using FastAPI CLI (Development)
 
 ```bash
-fastapi dev app/main.py
+fastapi dev app.main:app
 ```
 
 The API will be available at `http://localhost:8000`
