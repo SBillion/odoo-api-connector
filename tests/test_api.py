@@ -12,7 +12,7 @@ from app.main import create_app, get_odoo_client
 
 
 @pytest.fixture()
-def app() -> Generator[FastAPI, None, None]:
+def app() -> Generator[FastAPI]:
     app_instance = create_app(
         Settings(
             api_rate_limit_default="2/minute",
@@ -44,8 +44,13 @@ class TestEndpoints:
         assert response.headers.get("x-content-type-options") == "nosniff"
         assert response.headers.get("x-frame-options") == "DENY"
         assert response.headers.get("referrer-policy") == "no-referrer"
-        assert response.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"
-        assert response.headers.get("strict-transport-security") == "max-age=31536000; includeSubDomains"
+        assert (
+            response.headers.get("permissions-policy") == "geolocation=(), microphone=(), camera=()"
+        )
+        assert (
+            response.headers.get("strict-transport-security")
+            == "max-age=31536000; includeSubDomains"
+        )
 
     def test_rate_limiting(self, client: TestClient) -> None:
         """Test that the root endpoint is rate limited after repeated requests."""
@@ -58,7 +63,7 @@ class TestEndpoints:
             )
         )
         test_client = TestClient(test_app)
-        
+
         assert test_client.get("/").status_code == 200
         assert test_client.get("/").status_code == 200
         response = test_client.get("/")
@@ -75,7 +80,7 @@ class TestEndpoints:
             )
         )
         test_client = TestClient(test_app)
-        
+
         # Send a POST request with body exceeding the limit
         # Middleware rejects before endpoint routing, so endpoint method doesn't matter
         large_body = "x" * 200
@@ -94,7 +99,7 @@ class TestEndpoints:
             )
         )
         test_client = TestClient(test_app)
-        
+
         # Send a POST request with body within the limit
         # Middleware should allow it through (endpoint will return 405 since root only accepts GET)
         small_body = "x" * 50
@@ -114,7 +119,7 @@ class TestEndpoints:
             )
         )
         test_client = TestClient(test_app)
-        
+
         # Send a request with an invalid Content-Length header
         response = test_client.get("/", headers={"Content-Length": "invalid"})
         assert response.status_code == 400

@@ -4,25 +4,20 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import Settings, settings
 from app.odoo_client import OdooClient
-from app.security import MaxBodySizeMiddleware, SecurityHeadersMiddleware
+from app.security import MaxBodySizeMiddleware, SecurityHeadersMiddleware, rate_limit_handler
 
 
 def create_app(settings_override: Settings | None = None) -> FastAPI:
     active_settings = settings_override or settings
-
-    app = FastAPI(
-        title="Odoo API Connector",
-        description="A FastAPI connector to interact with Odoo API",
-        version="0.1.0",
-    )
 
     # Middleware order (outer to inner):
     # 1. TrustedHostMiddleware - validate host early
@@ -31,13 +26,44 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
     # 4. CORSMiddleware - handle CORS
     # 5. SecurityHeadersMiddleware - add headers to successful responses
 
+    middleware: list[Middleware] = []
+
     if active_settings.api_allowed_hosts != ["*"]:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=active_settings.api_allowed_hosts)  # type: ignore[arg-type]
+        middleware.append(
+            Middleware(TrustedHostMiddleware, allowed_hosts=active_settings.api_allowed_hosts)  # type: ignore[arg-type]
+        )
 
     if active_settings.api_enable_max_body_size:
-        app.add_middleware(  # type: ignore[arg-type]
-            MaxBodySizeMiddleware, max_body_size_bytes=active_settings.api_max_request_body_bytes
+        middleware.append(
+            Middleware(
+                MaxBodySizeMiddleware,  # type: ignore[arg-type]
+                max_body_size_bytes=active_settings.api_max_request_body_bytes,  # type: ignore[arg-type]
+            )
         )
+
+    if active_settings.api_enable_rate_limit:
+        middleware.append(Middleware(SlowAPIMiddleware))  # type: ignore[arg-type]
+
+    if active_settings.api_cors_origins is not None:
+        middleware.append(
+            Middleware(
+                CORSMiddleware,  # type: ignore[arg-type]
+                allow_origins=active_settings.api_cors_origins,
+                allow_credentials=True,
+                allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                allow_headers=["*"],
+            )
+        )
+
+    if active_settings.api_enable_security_headers:
+        middleware.append(Middleware(SecurityHeadersMiddleware))  # type: ignore[arg-type]
+
+    app = FastAPI(
+        title="Odoo API Connector",
+        description="A FastAPI connector to interact with Odoo API",
+        version="0.1.0",
+        middleware=middleware,
+    )
 
     limiter = Limiter(
         key_func=get_remote_address,
@@ -45,21 +71,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         enabled=active_settings.api_enable_rate_limit,
     )
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
-    if active_settings.api_enable_rate_limit:
-        app.add_middleware(SlowAPIMiddleware)  # type: ignore[arg-type]
-
-    if active_settings.api_cors_origins is not None:
-        app.add_middleware(  # type: ignore[arg-type]
-            CORSMiddleware,
-            allow_origins=active_settings.api_cors_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["*"],
-        )
-
-    if active_settings.api_enable_security_headers:
-        app.add_middleware(SecurityHeadersMiddleware)  # type: ignore[arg-type]
+    app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
     @app.get("/")
     @limiter.limit(active_settings.api_rate_limit_default)
@@ -123,6 +135,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=500, detail=f"Failed to get contact: {str(e)}")
 
     return app
+
 
 # Singleton instance for OdooClient
 _odoo_client: OdooClient | None = None
