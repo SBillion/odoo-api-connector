@@ -76,14 +76,15 @@ class TestEndpoints:
         )
         test_client = TestClient(test_app)
         
-        # Send a request with Content-Length header exceeding the limit
+        # Send a POST request with body exceeding the limit
+        # Middleware rejects before endpoint routing, so endpoint method doesn't matter
         large_body = "x" * 200
         response = test_client.post("/", content=large_body)
         assert response.status_code == 413
         assert response.text == "Request body too large"
 
     def test_max_body_size_within_limit(self) -> None:
-        """Test that requests within max body size are accepted."""
+        """Test that requests within max body size pass through the middleware."""
         test_app = create_app(
             Settings(
                 api_max_request_body_bytes=100,
@@ -94,10 +95,13 @@ class TestEndpoints:
         )
         test_client = TestClient(test_app)
         
-        # Send a request with Content-Length header within the limit
+        # Send a POST request with body within the limit
+        # Middleware should allow it through (endpoint will return 405 since root only accepts GET)
         small_body = "x" * 50
-        response = test_client.get("/", content=small_body)
-        assert response.status_code == 200
+        response = test_client.post("/", content=small_body)
+        # We expect 405 (Method Not Allowed) because root endpoint doesn't accept POST
+        # This proves the middleware passed it through without rejecting for size
+        assert response.status_code == 405
 
     def test_invalid_content_length_header(self) -> None:
         """Test that requests with invalid Content-Length headers return 400."""
