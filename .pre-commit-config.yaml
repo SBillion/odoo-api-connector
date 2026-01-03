@@ -20,16 +20,8 @@ repos:
       - id: ty
         name: ty type checker
         entry: uv run ty check .
-        language: python
+        language: system
         types: [python]
-        additional_dependencies:
-          - fastapi
-          - httpx
-          - pydantic
-          - pydantic-settings
-          - pytest
-          - pytest-asyncio
-          - slowapi
         always_run: true
         stages: [pre-commit]
   - repo: local
