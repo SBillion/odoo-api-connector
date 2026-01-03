@@ -150,6 +150,26 @@ curl http://localhost:8000/contacts/1
 
 ## Development
 
+### Pre-commit Hooks
+
+This project uses `pre-commit` to automatically check code quality before commits.
+
+Install the pre-commit hooks:
+```bash
+uv run pre-commit install
+```
+
+Hooks will run automatically on `git commit`. To manually run all hooks:
+```bash
+uv run pre-commit run --all-files
+```
+
+Configured hooks:
+- `ruff check` - Linting
+- `ruff format` - Code formatting
+- `ty` - Type checking
+- `pytest` - Unit tests
+
 ### Running Tests
 
 ```bash
@@ -178,6 +198,12 @@ uv run ruff check --fix .
 
 ```bash
 uv run ruff format .
+```
+
+### Type Checking
+
+```bash
+uv run ty check app/
 ```
 
 ## Project Structure
